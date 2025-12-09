@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Slideshow Control (Firebase)</title>
+  <title>Slideshow Control (Realtime DB - URL Only)</title>
   <style>
     :root{
       --bg:#0b1020;
@@ -79,14 +79,6 @@
       padding:10px 11px;
       border-radius:10px;
       outline:none;
-    }
-    input[type="file"]{
-      width:100%;
-      background:#0c1430;
-      border:1px dashed var(--border);
-      padding:12px;
-      border-radius:10px;
-      color:var(--muted);
     }
     .row{display:flex; gap:10px; align-items:center;}
     .row > *{flex:1}
@@ -210,10 +202,10 @@
 <body>
   <header>
     <div class="title">
-      <span class="badge">FIREBASE SLIDESHOW</span>
+      <span class="badge">REALTIME DB • URL ONLY</span>
       <div>
-        <h1>Control Panel</h1>
-        <div class="sub">Realtime DB + Storage • Sync semua device</div>
+        <h1>Slideshow Control</h1>
+        <div class="sub">Tambah slide guna link • Sync semua device</div>
       </div>
     </div>
     <div class="row" style="max-width:560px;">
@@ -234,9 +226,10 @@
           <input id="defaultDuration" type="number" min="1" step="1" />
           <button id="saveSettings" class="btn ok">Simpan</button>
         </div>
+        <div class="muted">Jika slide tiada duration, view akan guna default ini.</div>
 
-        <label>Watermark text (contoh: SK SRI AMAN)</label>
-        <input id="wmText" type="text" />
+        <label>Watermark text</label>
+        <input id="wmText" type="text" placeholder="Contoh: SK SRI AMAN" />
 
         <label>Watermark logo URL (optional)</label>
         <input id="wmLogo" type="url" placeholder="https://...png/jpg" />
@@ -245,31 +238,17 @@
 
         <div class="divider"></div>
 
-        <div class="section-title">Tambah dengan Upload</div>
-        <label>Pilih gambar/video</label>
-        <input id="fileInput" type="file" accept="image/*,video/*" />
-
-        <label>Tajuk (optional)</label>
-        <input id="uploadTitle" type="text" />
-
-        <label>Duration khusus (optional)</label>
-        <input id="uploadDuration" type="number" min="1" step="1" placeholder="Kosong = guna default" />
-
-        <button id="btnUpload" class="btn accent" style="margin-top:10px;">⬆️ Upload & Tambah Slide</button>
-
-        <div class="divider"></div>
-
-        <div class="section-title">Tambah dengan URL</div>
+        <div class="section-title">Tambah Slide (URL)</div>
         <label>URL gambar/video</label>
         <input id="urlInput" type="url" placeholder="https://..." />
 
         <label>Tajuk (optional)</label>
-        <input id="urlTitle" type="text" />
+        <input id="urlTitle" type="text" placeholder="Contoh: Poster Program" />
 
         <label>Duration khusus (optional)</label>
         <input id="urlDuration" type="number" min="1" step="1" placeholder="Kosong = guna default" />
 
-        <button id="btnAddUrl" class="btn" style="margin-top:10px;">➕ Tambah Slide URL</button>
+        <button id="btnAddUrl" class="btn accent" style="margin-top:10px;">➕ Tambah Slide URL</button>
 
         <div class="divider"></div>
 
@@ -302,7 +281,6 @@
   <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
 <script>
 /* =========================
@@ -321,7 +299,6 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-const storage = firebase.storage();
 
 /* =========================
    DB PATHS
@@ -340,11 +317,6 @@ const wmText = document.getElementById("wmText");
 const wmLogo = document.getElementById("wmLogo");
 const btnSaveWatermark = document.getElementById("saveWatermark");
 
-const fileInput = document.getElementById("fileInput");
-const uploadTitle = document.getElementById("uploadTitle");
-const uploadDuration = document.getElementById("uploadDuration");
-const btnUpload = document.getElementById("btnUpload");
-
 const urlInput = document.getElementById("urlInput");
 const urlTitle = document.getElementById("urlTitle");
 const urlDuration = document.getElementById("urlDuration");
@@ -357,14 +329,16 @@ const btnClearAll = document.getElementById("btnClearAll");
 const btnRefresh = document.getElementById("btnRefresh");
 
 const btnOpenAutoFS = document.getElementById("btnOpenAutoFS");
-const btnOpenView = document.getElementById("btnOpenView");
-
 const statusBox = document.getElementById("statusBox");
 
 /* =========================
    STATE
 ========================= */
-let settingsCache = { defaultDurationSec: 6, watermarkText: "SK SRI AMAN", watermarkLogoUrl: "" };
+let settingsCache = {
+  defaultDurationSec: 6,
+  watermarkText: "SK SRI AMAN",
+  watermarkLogoUrl: ""
+};
 let slidesCache = []; // array of {id, ...}
 
 /* =========================
@@ -373,9 +347,6 @@ let slidesCache = []; // array of {id, ...}
 function setStatus(msg, type="muted"){
   statusBox.className = `status ${type}`;
   statusBox.textContent = `Status: ${msg}`;
-}
-function isVideoFile(file){
-  return (file.type || "").startsWith("video");
 }
 function isVideoUrl(url=""){
   const u = url.toLowerCase();
@@ -426,7 +397,10 @@ btnSaveSettings.onclick = async () => {
     return;
   }
   try{
-    await db.ref(SETTINGS_PATH).update({ defaultDurationSec: val, updatedAt: Date.now() });
+    await db.ref(SETTINGS_PATH).update({
+      defaultDurationSec: val,
+      updatedAt: Date.now()
+    });
     setStatus("Default duration disimpan.", "ok");
   }catch(e){
     console.error(e);
@@ -449,55 +423,6 @@ btnSaveWatermark.onclick = async () => {
 };
 
 /* =========================
-   ADD UPLOAD SLIDE
-========================= */
-btnUpload.onclick = async () => {
-  const file = fileInput.files?.[0];
-  if (!file){
-    setStatus("Sila pilih fail gambar/video.", "err");
-    return;
-  }
-
-  try{
-    setStatus("Upload ke Firebase Storage...");
-
-    // create id
-    const newRef = db.ref(SLIDES_PATH).push();
-    const id = newRef.key;
-
-    const type = isVideoFile(file) ? "video" : "image";
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-    const storagePath = `${ROOT}/media/${id}/${safeName}`;
-    const sRef = storage.ref(storagePath);
-
-    await sRef.put(file);
-    const url = await sRef.getDownloadURL();
-
-    const order = getMaxOrder() + 1;
-
-    await newRef.set({
-      title: (uploadTitle.value || "").trim(),
-      type,
-      source: "storage",
-      url,
-      storagePath,
-      durationSec: uploadDuration.value ? Number(uploadDuration.value) : null,
-      order,
-      createdAt: Date.now()
-    });
-
-    fileInput.value = "";
-    uploadTitle.value = "";
-    uploadDuration.value = "";
-
-    setStatus("Slide berjaya ditambah.", "ok");
-  }catch(e){
-    console.error(e);
-    setStatus("Upload gagal. Semak rules Storage/DB.", "err");
-  }
-};
-
-/* =========================
    ADD URL SLIDE
 ========================= */
 btnAddUrl.onclick = async () => {
@@ -509,8 +434,6 @@ btnAddUrl.onclick = async () => {
 
   try{
     const newRef = db.ref(SLIDES_PATH).push();
-    const id = newRef.key;
-
     const type = isVideoUrl(url) ? "video" : "image";
     const order = getMaxOrder() + 1;
 
@@ -540,18 +463,8 @@ btnAddUrl.onclick = async () => {
 ========================= */
 async function deleteSlide(slide){
   if (!confirm("Padam slide ini?")) return;
-
   try{
     await db.ref(`${SLIDES_PATH}/${slide.id}`).remove();
-
-    if (slide.source === "storage" && slide.storagePath){
-      try{
-        await storage.ref(slide.storagePath).delete();
-      }catch(e){
-        // ignore if already deleted
-      }
-    }
-
     setStatus("Slide dipadam.", "ok");
   }catch(e){
     console.error(e);
@@ -564,22 +477,8 @@ async function deleteSlide(slide){
 ========================= */
 btnClearAll.onclick = async () => {
   if (!confirm("Padam SEMUA slides?")) return;
-
   try{
-    // fetch once then delete records
-    const snap = await db.ref(SLIDES_PATH).once("value");
-    const obj = snap.val() || {};
-    const all = Object.keys(obj).map(id => ({ id, ...obj[id] }));
-
     await db.ref(SLIDES_PATH).remove();
-
-    // attempt delete storage files
-    await Promise.all(all.map(async s=>{
-      if (s.source === "storage" && s.storagePath){
-        try{ await storage.ref(s.storagePath).delete(); }catch(e){}
-      }
-    }));
-
     setStatus("Semua slides dipadam.", "ok");
   }catch(e){
     console.error(e);
@@ -623,7 +522,6 @@ function attachDnD(item){
     const fromId = dragSrcId || (()=>{
       try{ return e.dataTransfer.getData("text/plain"); }catch{ return null; }
     })();
-
     const toId = item.dataset.id;
     if (!fromId || !toId || fromId === toId) return;
 
@@ -645,19 +543,15 @@ async function persistOrderFromDOM(){
   const ids = [...slidesList.querySelectorAll(".slide-item")]
     .map(el => el.dataset.id);
 
-  // if search filter active, we still reorder only visible items
   const visibleSet = new Set(ids);
   const all = sortSlides(slidesCache);
-
-  // build new sequence: visible first in the new DOM order + remaining in old order
   const map = new Map(all.map(s => [s.id, s]));
-  const newSeq = [];
 
+  const newSeq = [];
   ids.forEach(id=>{
     const s = map.get(id);
     if (s) newSeq.push(s);
   });
-
   all.forEach(s=>{
     if (!visibleSet.has(s.id)) newSeq.push(s);
   });
@@ -827,6 +721,25 @@ btnOpenAutoFS.onclick = ()=>{
   window.open(url, "_blank", "noopener");
   setStatus("View dibuka (Auto Fullscreen mode).", "ok");
 };
+
+/* =========================
+   INIT DEFAULT SETTINGS (if empty)
+========================= */
+(async function bootstrap(){
+  try{
+    const snap = await db.ref(SETTINGS_PATH).once("value");
+    if (!snap.exists()){
+      await db.ref(SETTINGS_PATH).set({
+        defaultDurationSec: 6,
+        watermarkText: "SK SRI AMAN",
+        watermarkLogoUrl: "",
+        createdAt: Date.now()
+      });
+    }
+  }catch(e){
+    console.warn(e);
+  }
+})();
 </script>
 </body>
 </html>
