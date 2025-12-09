@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Slideshow Control (Local)</title>
+  <title>Slideshow Control (Firebase)</title>
   <style>
     :root{
       --bg:#0b1020;
@@ -71,7 +71,7 @@
       font-size:12px; color:var(--muted);
       display:block; margin:10px 0 6px;
     }
-    input[type="text"], input[type="number"]{
+    input[type="text"], input[type="number"], input[type="url"]{
       width:100%;
       background:#0c1430;
       border:1px solid var(--border);
@@ -103,7 +103,7 @@
       text-align:center;
     }
     .btn:hover{transform: translateY(-1px); border-color: rgba(255,255,255,.18)}
-    .btn:active{transform: translateY(0px); opacity:.9}
+    .btn:active{transform: translateY(0); opacity:.92}
     .btn.accent{
       background: linear-gradient(90deg, var(--accent), var(--accent2));
       color:#081225;
@@ -114,13 +114,26 @@
       border: 1px solid rgba(255,107,107,.35);
       color:#ffd1d1;
     }
-    .btn.small{padding:6px 8px; font-size:11px}
     .btn.ok{
       background: rgba(34,197,94,.12);
       border:1px solid rgba(34,197,94,.35);
       color:#d9ffe9;
     }
+    .btn.small{padding:6px 8px; font-size:11px}
     .muted{color:var(--muted); font-size:11.5px;}
+    .divider{height:1px; background: var(--border); margin:12px 0;}
+    .status{
+      font-size:11.5px;
+      margin-top:8px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.02);
+    }
+    .status.ok{border-color: rgba(34,197,94,.35)}
+    .status.err{border-color: rgba(255,107,107,.35)}
+
+    /* List */
     .list{
       display:flex;
       flex-direction:column;
@@ -192,35 +205,20 @@
       padding:6px 8px !important;
       font-size:11px;
     }
-    .divider{height:1px; background: var(--border); margin:12px 0;}
-    .status{
-      font-size:11.5px;
-      margin-top:8px;
-      padding:8px 10px;
-      border-radius:10px;
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.02);
-    }
-    .status.ok{border-color: rgba(34,197,94,.35)}
-    .status.err{border-color: rgba(255,107,107,.35)}
-    .link-btn{
-      text-decoration:none;
-      display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    }
   </style>
 </head>
 <body>
   <header>
     <div class="title">
-      <span class="badge">LOCAL SLIDESHOW</span>
+      <span class="badge">FIREBASE SLIDESHOW</span>
       <div>
         <h1>Control Panel</h1>
-        <div class="sub">Index = Control • Link view guna URL anda</div>
+        <div class="sub">Realtime DB + Storage • Sync semua device</div>
       </div>
     </div>
-    <div class="row" style="max-width:620px;">
+    <div class="row" style="max-width:560px;">
       <button id="btnOpenAutoFS" class="btn small accent">🖥️ Open View + Auto Fullscreen</button>
-      <a id="viewLinkBtn" class="btn small link-btn" href="#" target="_blank">Buka View</a>
+      <a id="btnOpenView" class="btn small" href="./view.html" target="_blank">Buka View</a>
       <button id="btnRefresh" class="btn small">↻ Refresh</button>
     </div>
   </header>
@@ -233,50 +231,50 @@
 
         <label>Default masa setiap slide (saat)</label>
         <div class="row">
-          <input id="defaultDuration" type="number" min="1" step="1" placeholder="Contoh: 6" />
+          <input id="defaultDuration" type="number" min="1" step="1" />
           <button id="saveSettings" class="btn ok">Simpan</button>
         </div>
-        <div class="muted">Jika slide tiada duration, sistem guna default ini.</div>
+
+        <label>Watermark text (contoh: SK SRI AMAN)</label>
+        <input id="wmText" type="text" />
+
+        <label>Watermark logo URL (optional)</label>
+        <input id="wmLogo" type="url" placeholder="https://...png/jpg" />
+
+        <button id="saveWatermark" class="btn" style="margin-top:8px;">Simpan Watermark</button>
 
         <div class="divider"></div>
 
-        <div class="section-title">Tambah dengan Upload (Local)</div>
+        <div class="section-title">Tambah dengan Upload</div>
         <label>Pilih gambar/video</label>
         <input id="fileInput" type="file" accept="image/*,video/*" />
 
         <label>Tajuk (optional)</label>
-        <input id="uploadTitle" type="text" placeholder="Contoh: Hari Anugerah 2025" />
+        <input id="uploadTitle" type="text" />
 
         <label>Duration khusus (optional)</label>
         <input id="uploadDuration" type="number" min="1" step="1" placeholder="Kosong = guna default" />
 
-        <button id="btnUpload" class="btn accent" style="margin-top:10px;">⬆️ Simpan & Tambah Slide</button>
+        <button id="btnUpload" class="btn accent" style="margin-top:10px;">⬆️ Upload & Tambah Slide</button>
 
         <div class="divider"></div>
 
         <div class="section-title">Tambah dengan URL</div>
-        <label>URL gambar/video (online)</label>
-        <input id="urlInput" type="text" placeholder="https://..." />
+        <label>URL gambar/video</label>
+        <input id="urlInput" type="url" placeholder="https://..." />
 
         <label>Tajuk (optional)</label>
-        <input id="urlTitle" type="text" placeholder="Contoh: Poster Program" />
+        <input id="urlTitle" type="text" />
 
         <label>Duration khusus (optional)</label>
         <input id="urlDuration" type="number" min="1" step="1" placeholder="Kosong = guna default" />
 
-        <button id="btnAddUrl" class="btn" style="margin-top:10px;">➕ Tambah dari URL</button>
+        <button id="btnAddUrl" class="btn" style="margin-top:10px;">➕ Tambah Slide URL</button>
 
         <div class="divider"></div>
 
-        <div class="section-title">Pengurusan Data</div>
-        <div class="row">
-          <button id="btnExport" class="btn">⤓ Export JSON</button>
-          <label class="btn">
-            ⤒ Import JSON
-            <input id="importInput" type="file" accept="application/json" style="display:none;">
-          </label>
-        </div>
-        <button id="btnClearAll" class="btn danger" style="margin-top:8px;">🧹 Padam Semua Slides</button>
+        <div class="section-title">Pengurusan</div>
+        <button id="btnClearAll" class="btn danger">🧹 Padam Semua Slides</button>
 
         <div id="statusBox" class="status muted">Status: sedia.</div>
       </div>
@@ -288,7 +286,7 @@
         <div class="row" style="justify-content:space-between; gap:14px;">
           <div>
             <div class="section-title" style="margin-bottom:4px;">Senarai Slides</div>
-            <div class="muted">Drag & drop pada item untuk susun urutan</div>
+            <div class="muted">Drag & drop untuk susun urutan</div>
           </div>
           <div class="row" style="max-width:260px;">
             <input id="searchInput" type="text" placeholder="Cari tajuk..." />
@@ -301,137 +299,51 @@
     </div>
   </div>
 
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
 <script>
 /* =========================
-   LOCAL SLIDESHOW STORAGE
-   - metadata: localStorage
-   - media blobs: IndexedDB
+   FIREBASE CONFIG (USER)
 ========================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDYmt80huWPnfgyppPCKlC_lsrQAcu2zEw",
+  authDomain: "operasi-asas-murid.firebaseapp.com",
+  databaseURL: "https://operasi-asas-murid-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "operasi-asas-murid",
+  storageBucket: "operasi-asas-murid.firebasestorage.app",
+  messagingSenderId: "466962164666",
+  appId: "1:466962164666:web:afe20ca7ae37298d154b83",
+  measurementId: "G-4S5ZR7ZDKP"
+};
 
-// ✅ YOUR VIEW PAGE BASE URL
-const VIEW_BASE = "https://g-99215544-beep.github.io/slideshowview/";
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const storage = firebase.storage();
 
-const META_KEY = "slideshow_local_meta_v1";
-const SETTINGS_KEY = "slideshow_local_settings_v1";
-const DB_NAME = "slideshow_local_db_v1";
-const STORE = "media";
-const CHANNEL = "slideshow_local_channel_v1";
+/* =========================
+   DB PATHS
+========================= */
+const ROOT = "slideshow";
+const SLIDES_PATH = `${ROOT}/slides`;
+const SETTINGS_PATH = `${ROOT}/settings`;
 
-const bc = ("BroadcastChannel" in window) ? new BroadcastChannel(CHANNEL) : null;
-
-// ---------- IDB HELPERS ----------
-function openDB(){
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbPut(id, blob){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(blob, id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function idbGet(id){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbDelete(id){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function idbClear(){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-// ---------- META HELPERS ----------
-function loadMeta(){
-  try { return JSON.parse(localStorage.getItem(META_KEY) || "[]"); }
-  catch { return []; }
-}
-function saveMeta(arr){
-  localStorage.setItem(META_KEY, JSON.stringify(arr));
-  notifyUpdate();
-}
-function loadSettings(){
-  try {
-    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
-    return s || { defaultDurationSec: 6, updatedAt: Date.now() };
-  } catch {
-    return { defaultDurationSec: 6, updatedAt: Date.now() };
-  }
-}
-function saveSettings(s){
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...s, updatedAt: Date.now() }));
-  notifyUpdate();
-}
-
-function notifyUpdate(){
-  if (bc) bc.postMessage({ type:"update", at: Date.now() });
-}
-
-// ---------- UTIL ----------
-function nowId(){
-  return `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-}
-function isVideoFile(file){
-  return (file.type || "").startsWith("video");
-}
-function isVideoUrl(url=""){
-  const u = url.toLowerCase();
-  return u.includes(".mp4") || u.includes(".webm") || u.includes(".ogg") || u.includes("video");
-}
-function sortSlides(list){
-  return [...list].sort((a,b) => {
-    const ao = Number(a.order ?? 999999);
-    const bo = Number(b.order ?? 999999);
-    if (ao !== bo) return ao - bo;
-    return Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0);
-  });
-}
-function applySequentialOrder(arr){
-  const sorted = sortSlides(arr);
-  sorted.forEach((x, i) => x.order = i + 1);
-  return sorted;
-}
-
-// ---------- UI ELEMENTS ----------
+/* =========================
+   UI
+========================= */
 const elDefaultDuration = document.getElementById("defaultDuration");
 const btnSaveSettings = document.getElementById("saveSettings");
-const btnUpload = document.getElementById("btnUpload");
+
+const wmText = document.getElementById("wmText");
+const wmLogo = document.getElementById("wmLogo");
+const btnSaveWatermark = document.getElementById("saveWatermark");
+
 const fileInput = document.getElementById("fileInput");
 const uploadTitle = document.getElementById("uploadTitle");
 const uploadDuration = document.getElementById("uploadDuration");
+const btnUpload = document.getElementById("btnUpload");
 
 const urlInput = document.getElementById("urlInput");
 const urlTitle = document.getElementById("urlTitle");
@@ -439,63 +351,279 @@ const urlDuration = document.getElementById("urlDuration");
 const btnAddUrl = document.getElementById("btnAddUrl");
 
 const slidesList = document.getElementById("slidesList");
-const statusBox = document.getElementById("statusBox");
-const btnRefresh = document.getElementById("btnRefresh");
 const searchInput = document.getElementById("searchInput");
 
-const btnExport = document.getElementById("btnExport");
-const importInput = document.getElementById("importInput");
 const btnClearAll = document.getElementById("btnClearAll");
+const btnRefresh = document.getElementById("btnRefresh");
 
 const btnOpenAutoFS = document.getElementById("btnOpenAutoFS");
-const viewLinkBtn = document.getElementById("viewLinkBtn");
+const btnOpenView = document.getElementById("btnOpenView");
 
-let settings = loadSettings();
-let cachedSlides = sortSlides(loadMeta());
+const statusBox = document.getElementById("statusBox");
 
-// set view link button
-viewLinkBtn.href = VIEW_BASE;
+/* =========================
+   STATE
+========================= */
+let settingsCache = { defaultDurationSec: 6, watermarkText: "SK SRI AMAN", watermarkLogoUrl: "" };
+let slidesCache = []; // array of {id, ...}
 
-// ---------- STATUS ----------
+/* =========================
+   HELPERS
+========================= */
 function setStatus(msg, type="muted"){
   statusBox.className = `status ${type}`;
   statusBox.textContent = `Status: ${msg}`;
 }
+function isVideoFile(file){
+  return (file.type || "").startsWith("video");
+}
+function isVideoUrl(url=""){
+  const u = url.toLowerCase();
+  return u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".ogg") || u.includes("video");
+}
+function sortSlides(arr){
+  return [...arr].sort((a,b)=>{
+    const ao = Number(a.order ?? 999999);
+    const bo = Number(b.order ?? 999999);
+    if (ao !== bo) return ao - bo;
+    return Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0);
+  });
+}
+function getMaxOrder(){
+  if (!slidesCache.length) return 0;
+  return Math.max(...slidesCache.map(s => Number(s.order ?? 0)));
+}
 
-// ---------- DRAG & DROP LOGIC ----------
+/* =========================
+   REALTIME LISTENERS
+========================= */
+db.ref(SETTINGS_PATH).on("value", snap=>{
+  const v = snap.val() || {};
+  settingsCache = {
+    defaultDurationSec: Number(v.defaultDurationSec || 6),
+    watermarkText: v.watermarkText || "SK SRI AMAN",
+    watermarkLogoUrl: v.watermarkLogoUrl || ""
+  };
+  elDefaultDuration.value = settingsCache.defaultDurationSec;
+  wmText.value = settingsCache.watermarkText;
+  wmLogo.value = settingsCache.watermarkLogoUrl;
+});
+
+db.ref(SLIDES_PATH).on("value", snap=>{
+  const obj = snap.val() || {};
+  const arr = Object.keys(obj).map(id => ({ id, ...obj[id] }));
+  slidesCache = sortSlides(arr);
+  renderSlides();
+});
+
+/* =========================
+   SETTINGS SAVE
+========================= */
+btnSaveSettings.onclick = async () => {
+  const val = Number(elDefaultDuration.value || 0);
+  if (!val || val < 1){
+    setStatus("Default duration tidak sah.", "err");
+    return;
+  }
+  try{
+    await db.ref(SETTINGS_PATH).update({ defaultDurationSec: val, updatedAt: Date.now() });
+    setStatus("Default duration disimpan.", "ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Gagal simpan settings.", "err");
+  }
+};
+
+btnSaveWatermark.onclick = async () => {
+  try{
+    await db.ref(SETTINGS_PATH).update({
+      watermarkText: (wmText.value || "").trim() || "SK SRI AMAN",
+      watermarkLogoUrl: (wmLogo.value || "").trim(),
+      updatedAt: Date.now()
+    });
+    setStatus("Watermark disimpan.", "ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Gagal simpan watermark.", "err");
+  }
+};
+
+/* =========================
+   ADD UPLOAD SLIDE
+========================= */
+btnUpload.onclick = async () => {
+  const file = fileInput.files?.[0];
+  if (!file){
+    setStatus("Sila pilih fail gambar/video.", "err");
+    return;
+  }
+
+  try{
+    setStatus("Upload ke Firebase Storage...");
+
+    // create id
+    const newRef = db.ref(SLIDES_PATH).push();
+    const id = newRef.key;
+
+    const type = isVideoFile(file) ? "video" : "image";
+    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+    const storagePath = `${ROOT}/media/${id}/${safeName}`;
+    const sRef = storage.ref(storagePath);
+
+    await sRef.put(file);
+    const url = await sRef.getDownloadURL();
+
+    const order = getMaxOrder() + 1;
+
+    await newRef.set({
+      title: (uploadTitle.value || "").trim(),
+      type,
+      source: "storage",
+      url,
+      storagePath,
+      durationSec: uploadDuration.value ? Number(uploadDuration.value) : null,
+      order,
+      createdAt: Date.now()
+    });
+
+    fileInput.value = "";
+    uploadTitle.value = "";
+    uploadDuration.value = "";
+
+    setStatus("Slide berjaya ditambah.", "ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Upload gagal. Semak rules Storage/DB.", "err");
+  }
+};
+
+/* =========================
+   ADD URL SLIDE
+========================= */
+btnAddUrl.onclick = async () => {
+  const url = (urlInput.value || "").trim();
+  if (!url){
+    setStatus("Sila isi URL.", "err");
+    return;
+  }
+
+  try{
+    const newRef = db.ref(SLIDES_PATH).push();
+    const id = newRef.key;
+
+    const type = isVideoUrl(url) ? "video" : "image";
+    const order = getMaxOrder() + 1;
+
+    await newRef.set({
+      title: (urlTitle.value || "").trim(),
+      type,
+      source: "url",
+      url,
+      durationSec: urlDuration.value ? Number(urlDuration.value) : null,
+      order,
+      createdAt: Date.now()
+    });
+
+    urlInput.value = "";
+    urlTitle.value = "";
+    urlDuration.value = "";
+
+    setStatus("Slide URL ditambah.", "ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Gagal tambah slide URL.", "err");
+  }
+};
+
+/* =========================
+   DELETE SLIDE
+========================= */
+async function deleteSlide(slide){
+  if (!confirm("Padam slide ini?")) return;
+
+  try{
+    await db.ref(`${SLIDES_PATH}/${slide.id}`).remove();
+
+    if (slide.source === "storage" && slide.storagePath){
+      try{
+        await storage.ref(slide.storagePath).delete();
+      }catch(e){
+        // ignore if already deleted
+      }
+    }
+
+    setStatus("Slide dipadam.", "ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Gagal padam slide.", "err");
+  }
+}
+
+/* =========================
+   CLEAR ALL
+========================= */
+btnClearAll.onclick = async () => {
+  if (!confirm("Padam SEMUA slides?")) return;
+
+  try{
+    // fetch once then delete records
+    const snap = await db.ref(SLIDES_PATH).once("value");
+    const obj = snap.val() || {};
+    const all = Object.keys(obj).map(id => ({ id, ...obj[id] }));
+
+    await db.ref(SLIDES_PATH).remove();
+
+    // attempt delete storage files
+    await Promise.all(all.map(async s=>{
+      if (s.source === "storage" && s.storagePath){
+        try{ await storage.ref(s.storagePath).delete(); }catch(e){}
+      }
+    }));
+
+    setStatus("Semua slides dipadam.", "ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Gagal clear all.", "err");
+  }
+};
+
+/* =========================
+   DRAG & DROP REORDER
+========================= */
 let dragSrcId = null;
 
 function attachDnD(item){
-  item.addEventListener("dragstart", (e) => {
+  item.addEventListener("dragstart", (e)=>{
     dragSrcId = item.dataset.id;
     item.classList.add("dragging");
     e.dataTransfer.effectAllowed = "move";
-    try { e.dataTransfer.setData("text/plain", dragSrcId); } catch {}
+    try{ e.dataTransfer.setData("text/plain", dragSrcId); }catch{}
   });
 
-  item.addEventListener("dragend", () => {
+  item.addEventListener("dragend", ()=>{
     item.classList.remove("dragging");
     [...document.querySelectorAll(".slide-item.drag-over")]
-      .forEach(el => el.classList.remove("drag-over"));
+      .forEach(el=>el.classList.remove("drag-over"));
   });
 
-  item.addEventListener("dragover", (e) => {
+  item.addEventListener("dragover", (e)=>{
     e.preventDefault();
     item.classList.add("drag-over");
     e.dataTransfer.dropEffect = "move";
   });
 
-  item.addEventListener("dragleave", () => {
+  item.addEventListener("dragleave", ()=>{
     item.classList.remove("drag-over");
   });
 
-  item.addEventListener("drop", (e) => {
+  item.addEventListener("drop", (e)=>{
     e.preventDefault();
     item.classList.remove("drag-over");
 
     const fromId = dragSrcId || (()=>{
-      try { return e.dataTransfer.getData("text/plain"); } catch { return null; }
+      try{ return e.dataTransfer.getData("text/plain"); }catch{ return null; }
     })();
+
     const toId = item.dataset.id;
     if (!fromId || !toId || fromId === toId) return;
 
@@ -504,60 +632,71 @@ function attachDnD(item){
     if (!fromEl || !toEl) return;
 
     const rect = toEl.getBoundingClientRect();
-    const before = (e.clientY < rect.top + rect.height / 2);
+    const before = (e.clientY < rect.top + rect.height/2);
 
-    if (before) {
-      slidesList.insertBefore(fromEl, toEl);
-    } else {
-      slidesList.insertBefore(fromEl, toEl.nextSibling);
-    }
+    if (before) slidesList.insertBefore(fromEl, toEl);
+    else slidesList.insertBefore(fromEl, toEl.nextSibling);
 
     persistOrderFromDOM();
   });
 }
 
-function persistOrderFromDOM(){
+async function persistOrderFromDOM(){
   const ids = [...slidesList.querySelectorAll(".slide-item")]
     .map(el => el.dataset.id);
 
-  const arr = loadMeta();
-  const map = new Map(arr.map(x => [x.id, x]));
-  const newArr = ids.map((id, idx) => {
+  // if search filter active, we still reorder only visible items
+  const visibleSet = new Set(ids);
+  const all = sortSlides(slidesCache);
+
+  // build new sequence: visible first in the new DOM order + remaining in old order
+  const map = new Map(all.map(s => [s.id, s]));
+  const newSeq = [];
+
+  ids.forEach(id=>{
     const s = map.get(id);
-    if (!s) return null;
-    s.order = idx + 1;
-    return s;
-  }).filter(Boolean);
+    if (s) newSeq.push(s);
+  });
 
-  const remaining = arr.filter(x => !ids.includes(x.id));
-  const merged = [...newArr, ...remaining];
+  all.forEach(s=>{
+    if (!visibleSet.has(s.id)) newSeq.push(s);
+  });
 
-  saveMeta(merged);
-  setStatus("Urutan disusun dengan drag & drop.", "ok");
-  renderSlides();
+  const updates = {};
+  newSeq.forEach((s, i)=>{
+    updates[`${SLIDES_PATH}/${s.id}/order`] = i + 1;
+  });
+
+  try{
+    await db.ref().update(updates);
+    setStatus("Urutan disimpan (Realtime).", "ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Gagal simpan urutan.", "err");
+  }
 }
 
-// ---------- RENDER ----------
-async function renderSlides(){
-  cachedSlides = sortSlides(loadMeta());
-
+/* =========================
+   RENDER LIST
+========================= */
+function renderSlides(){
   const q = (searchInput.value || "").toLowerCase().trim();
-  const filtered = !q ? cachedSlides : cachedSlides.filter(s => (s.title || "").toLowerCase().includes(q));
+  const filtered = !q ? slidesCache : slidesCache.filter(s => (s.title || "").toLowerCase().includes(q));
 
   slidesList.innerHTML = "";
 
   if (!filtered.length){
     const empty = document.createElement("div");
     empty.className = "muted";
-    empty.textContent = "Tiada slide lagi. Tambah media di panel kiri.";
+    empty.textContent = "Tiada slide lagi.";
     slidesList.appendChild(empty);
     return;
   }
 
-  for (const s of filtered){
+  filtered.forEach(slide=>{
     const item = document.createElement("div");
     item.className = "slide-item";
-    item.dataset.id = s.id;
+    item.dataset.id = slide.id;
     item.draggable = true;
 
     const thumb = document.createElement("div");
@@ -568,36 +707,17 @@ async function renderSlides(){
     handle.textContent = "↕";
     thumb.appendChild(handle);
 
-    if (s.type === "video"){
+    if (slide.type === "video"){
       const v = document.createElement("video");
       v.muted = true;
       v.playsInline = true;
       v.preload = "metadata";
-
-      if (s.source === "blob"){
-        const blob = await idbGet(s.id);
-        if (blob){
-          const u = URL.createObjectURL(blob);
-          v.src = u;
-          v.onloadeddata = () => URL.revokeObjectURL(u);
-        }
-      } else {
-        v.src = s.url || "";
-      }
+      v.src = slide.url || "";
       thumb.appendChild(v);
     } else {
       const img = document.createElement("img");
-      if (s.source === "blob"){
-        const blob = await idbGet(s.id);
-        if (blob){
-          const u = URL.createObjectURL(blob);
-          img.src = u;
-          img.onload = () => URL.revokeObjectURL(u);
-        }
-      } else {
-        img.src = s.url || "";
-      }
-      img.alt = s.title || "slide";
+      img.src = slide.url || "";
+      img.alt = slide.title || "slide";
       thumb.appendChild(img);
     }
 
@@ -606,10 +726,10 @@ async function renderSlides(){
 
     const h3 = document.createElement("h3");
     const t = document.createElement("span");
-    t.textContent = s.title || "(Tiada tajuk)";
+    t.textContent = slide.title || "(Tiada tajuk)";
     const pill = document.createElement("span");
     pill.className = "pill";
-    pill.textContent = s.type === "video" ? "VIDEO" : "IMAGE";
+    pill.textContent = slide.type === "video" ? "VIDEO" : "IMAGE";
     h3.appendChild(t);
     h3.appendChild(pill);
 
@@ -618,7 +738,7 @@ async function renderSlides(){
 
     const titleInput = document.createElement("input");
     titleInput.type = "text";
-    titleInput.value = s.title || "";
+    titleInput.value = slide.title || "";
     titleInput.placeholder = "Tajuk...";
     titleInput.style.flex = "1";
     titleInput.style.minWidth = "140px";
@@ -626,14 +746,13 @@ async function renderSlides(){
     const btnSaveTitle = document.createElement("button");
     btnSaveTitle.className = "btn small";
     btnSaveTitle.textContent = "Simpan Tajuk";
-    btnSaveTitle.onclick = () => {
-      const arr = loadMeta();
-      const i = arr.findIndex(x => x.id === s.id);
-      if (i !== -1){
-        arr[i].title = titleInput.value.trim();
-        saveMeta(arr);
+    btnSaveTitle.onclick = async ()=>{
+      try{
+        await db.ref(`${SLIDES_PATH}/${slide.id}`).update({ title: titleInput.value.trim() });
         setStatus("Tajuk dikemas kini.", "ok");
-        renderSlides();
+      }catch(e){
+        console.error(e);
+        setStatus("Gagal simpan tajuk.", "err");
       }
     };
 
@@ -653,39 +772,28 @@ async function renderSlides(){
     durationInput.min = "1";
     durationInput.step = "1";
     durationInput.className = "duration-input";
-    durationInput.placeholder = `Default ${settings.defaultDurationSec}s`;
-    durationInput.value = s.durationSec ?? "";
+    durationInput.placeholder = `Default ${settingsCache.defaultDurationSec}s`;
+    durationInput.value = slide.durationSec ?? "";
 
     const btnSaveDur = document.createElement("button");
     btnSaveDur.className = "btn small ok";
     btnSaveDur.textContent = "Simpan Masa";
-    btnSaveDur.onclick = () => {
-      const arr = loadMeta();
-      const i = arr.findIndex(x => x.id === s.id);
-      if (i !== -1){
-        arr[i].durationSec = durationInput.value ? Number(durationInput.value) : null;
-        saveMeta(arr);
+    btnSaveDur.onclick = async ()=>{
+      try{
+        await db.ref(`${SLIDES_PATH}/${slide.id}`).update({
+          durationSec: durationInput.value ? Number(durationInput.value) : null
+        });
         setStatus("Duration dikemas kini.", "ok");
-        renderSlides();
+      }catch(e){
+        console.error(e);
+        setStatus("Gagal simpan duration.", "err");
       }
     };
 
     const btnDelete = document.createElement("button");
     btnDelete.className = "btn small danger";
     btnDelete.textContent = "Padam";
-    btnDelete.onclick = async () => {
-      if (!confirm("Padam slide ini?")) return;
-
-      const arr = loadMeta().filter(x => x.id !== s.id);
-      saveMeta(arr);
-
-      if (s.source === "blob"){
-        await idbDelete(s.id);
-      }
-
-      setStatus("Slide dipadam.", "ok");
-      renderSlides();
-    };
+    btnDelete.onclick = ()=> deleteSlide(slide);
 
     line2.appendChild(durLabel);
     line2.appendChild(durationInput);
@@ -701,206 +809,24 @@ async function renderSlides(){
 
     attachDnD(item);
     slidesList.appendChild(item);
-  }
+  });
 }
 
-// ---------- ADD FILE SLIDE ----------
-btnUpload.onclick = async () => {
-  const file = fileInput.files?.[0];
-  if (!file){
-    setStatus("Sila pilih fail gambar/video.", "err");
-    return;
-  }
-
-  try{
-    setStatus("Menyimpan media secara local...");
-
-    const id = nowId();
-    const type = isVideoFile(file) ? "video" : "image";
-
-    await idbPut(id, file);
-
-    const arr = applySequentialOrder(loadMeta());
-    const maxOrder = arr.length ? Math.max(...arr.map(s => Number(s.order ?? 0))) : 0;
-
-    arr.push({
-      id,
-      title: uploadTitle.value.trim(),
-      type,
-      source: "blob",
-      durationSec: uploadDuration.value ? Number(uploadDuration.value) : null,
-      order: maxOrder + 1,
-      createdAt: Date.now()
-    });
-
-    saveMeta(arr);
-
-    fileInput.value = "";
-    uploadTitle.value = "";
-    uploadDuration.value = "";
-
-    setStatus("Berjaya tambah slide local.", "ok");
-    renderSlides();
-  } catch(e){
-    console.error(e);
-    setStatus("Gagal simpan media. Storage browser mungkin penuh.", "err");
-  }
-};
-
-// ---------- ADD URL SLIDE ----------
-btnAddUrl.onclick = () => {
-  const url = urlInput.value.trim();
-  if (!url){
-    setStatus("Sila isi URL.", "err");
-    return;
-  }
-
-  const arr = applySequentialOrder(loadMeta());
-  const maxOrder = arr.length ? Math.max(...arr.map(s => Number(s.order ?? 0))) : 0;
-
-  arr.push({
-    id: nowId(),
-    title: urlTitle.value.trim(),
-    type: isVideoUrl(url) ? "video" : "image",
-    source: "url",
-    url,
-    durationSec: urlDuration.value ? Number(urlDuration.value) : null,
-    order: maxOrder + 1,
-    createdAt: Date.now()
-  });
-
-  saveMeta(arr);
-
-  urlInput.value = "";
-  urlTitle.value = "";
-  urlDuration.value = "";
-
-  setStatus("Slide URL ditambah.", "ok");
-  renderSlides();
-};
-
-// ---------- SETTINGS ----------
-btnSaveSettings.onclick = () => {
-  const val = Number(elDefaultDuration.value || 0);
-  if (!val || val < 1){
-    setStatus("Sila isi default duration yang sah.", "err");
-    return;
-  }
-  settings.defaultDurationSec = val;
-  saveSettings(settings);
-  setStatus("Settings global disimpan.", "ok");
-  renderSlides();
-};
-
-// ---------- EXPORT / IMPORT ----------
-btnExport.onclick = async () => {
-  const meta = sortSlides(loadMeta());
-  const s = loadSettings();
-
-  const payload = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    settings: s,
-    slides: meta
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "slideshow-local-export.json";
-  a.click();
-  URL.revokeObjectURL(url);
-
-  setStatus("Export metadata berjaya.", "ok");
-};
-
-importInput.onchange = async () => {
-  const file = importInput.files?.[0];
-  if (!file) return;
-
-  try{
-    const text = await file.text();
-    const data = JSON.parse(text);
-
-    if (!data || !Array.isArray(data.slides)){
-      setStatus("Fail import tidak sah.", "err");
-      return;
-    }
-
-    const normalized = applySequentialOrder(data.slides);
-
-    localStorage.setItem(META_KEY, JSON.stringify(normalized));
-    if (data.settings){
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.settings));
-    }
-
-    settings = loadSettings();
-    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-
-    notifyUpdate();
-    setStatus("Import metadata berjaya. (Media blob perlu re-upload jika tiada)", "ok");
-    renderSlides();
-  } catch(e){
-    console.error(e);
-    setStatus("Import gagal.", "err");
-  } finally {
-    importInput.value = "";
-  }
-};
-
-// ---------- CLEAR ALL ----------
-btnClearAll.onclick = async () => {
-  if (!confirm("Padam SEMUA slides & media local?")) return;
-
-  localStorage.removeItem(META_KEY);
-  await idbClear();
-
-  notifyUpdate();
-  setStatus("Semua slides dipadam.", "ok");
-  renderSlides();
-};
-
-// ---------- OPEN VIEW + AUTO FS ----------
-btnOpenAutoFS.onclick = () => {
-  // AutoFS expects your view page to support ?autofs=1, like the code I gave earlier
-  const url = `${VIEW_BASE}?autofs=1&t=${Date.now()}`;
-  window.open(url, "_blank", "noopener");
-  setStatus("View dibuka pada URL anda (Auto Fullscreen mode).", "ok");
-};
-
-// ---------- REFRESH / SEARCH ----------
-btnRefresh.onclick = () => {
-  settings = loadSettings();
-  elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-  renderSlides();
-  setStatus("Paparan dikemas kini.", "ok");
-};
+/* =========================
+   TOP BUTTONS
+========================= */
 searchInput.addEventListener("input", renderSlides);
 
-// ---------- SYNC LISTENERS ----------
-window.addEventListener("storage", (e) => {
-  if (e.key === META_KEY || e.key === SETTINGS_KEY){
-    settings = loadSettings();
-    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-    renderSlides();
-  }
-});
-if (bc){
-  bc.onmessage = () => {
-    settings = loadSettings();
-    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-    renderSlides();
-  };
-}
-
-// ---------- INIT ----------
-(function init(){
-  settings = loadSettings();
-  elDefaultDuration.value = settings.defaultDurationSec ?? 6;
+btnRefresh.onclick = ()=>{
   renderSlides();
-  setStatus("Sedia (Local Mode).", "ok");
-})();
+  setStatus("Refresh paparan.", "ok");
+};
+
+btnOpenAutoFS.onclick = ()=>{
+  const url = `./view.html?autofs=1&t=${Date.now()}`;
+  window.open(url, "_blank", "noopener");
+  setStatus("View dibuka (Auto Fullscreen mode).", "ok");
+};
 </script>
 </body>
 </html>
