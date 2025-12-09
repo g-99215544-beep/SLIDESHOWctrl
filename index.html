@@ -322,4 +322,583 @@ function openDB(){
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contai
+      if (!db.objectStoreNames.contains(STORE)) {
+        db.createObjectStore(STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPut(id, blob){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(blob, id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbGet(id){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbDelete(id){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbClear(){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ---------- META HELPERS ----------
+function loadMeta(){
+  try { return JSON.parse(localStorage.getItem(META_KEY) || "[]"); }
+  catch { return []; }
+}
+function saveMeta(arr){
+  localStorage.setItem(META_KEY, JSON.stringify(arr));
+  notifyUpdate();
+}
+function loadSettings(){
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+    return s || { defaultDurationSec: 6, updatedAt: Date.now() };
+  } catch {
+    return { defaultDurationSec: 6, updatedAt: Date.now() };
+  }
+}
+function saveSettings(s){
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...s, updatedAt: Date.now() }));
+  notifyUpdate();
+}
+
+function notifyUpdate(){
+  if (bc) bc.postMessage({ type:"update", at: Date.now() });
+}
+
+// ---------- UTIL ----------
+function nowId(){
+  return `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+}
+function isVideoFile(file){
+  return (file.type || "").startsWith("video");
+}
+function isVideoUrl(url=""){
+  const u = url.toLowerCase();
+  return u.includes(".mp4") || u.includes(".webm") || u.includes(".ogg") || u.includes("video");
+}
+function sortSlides(list){
+  return [...list].sort((a,b) => {
+    const ao = Number(a.order ?? 999999);
+    const bo = Number(b.order ?? 999999);
+    if (ao !== bo) return ao - bo;
+    return Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0);
+  });
+}
+function applySequentialOrder(arr){
+  const sorted = sortSlides(arr);
+  sorted.forEach((x, i) => x.order = i + 1);
+  return sorted;
+}
+
+// ---------- UI ELEMENTS ----------
+const elDefaultDuration = document.getElementById("defaultDuration");
+const btnSaveSettings = document.getElementById("saveSettings");
+const btnUpload = document.getElementById("btnUpload");
+const fileInput = document.getElementById("fileInput");
+const uploadTitle = document.getElementById("uploadTitle");
+const uploadDuration = document.getElementById("uploadDuration");
+
+const urlInput = document.getElementById("urlInput");
+const urlTitle = document.getElementById("urlTitle");
+const urlDuration = document.getElementById("urlDuration");
+const btnAddUrl = document.getElementById("btnAddUrl");
+
+const slidesList = document.getElementById("slidesList");
+const statusBox = document.getElementById("statusBox");
+const btnRefresh = document.getElementById("btnRefresh");
+const searchInput = document.getElementById("searchInput");
+
+const btnExport = document.getElementById("btnExport");
+const importInput = document.getElementById("importInput");
+const btnClearAll = document.getElementById("btnClearAll");
+
+const btnOpenAutoFS = document.getElementById("btnOpenAutoFS");
+
+let settings = loadSettings();
+let cachedSlides = sortSlides(loadMeta());
+
+// ---------- STATUS ----------
+function setStatus(msg, type="muted"){
+  statusBox.className = `status ${type}`;
+  statusBox.textContent = `Status: ${msg}`;
+}
+
+// ---------- DRAG & DROP LOGIC ----------
+let dragSrcId = null;
+
+function attachDnD(item){
+  item.addEventListener("dragstart", (e) => {
+    dragSrcId = item.dataset.id;
+    item.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", dragSrcId); } catch {}
+  });
+
+  item.addEventListener("dragend", () => {
+    item.classList.remove("dragging");
+    [...document.querySelectorAll(".slide-item.drag-over")]
+      .forEach(el => el.classList.remove("drag-over"));
+  });
+
+  item.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    item.classList.add("drag-over");
+    e.dataTransfer.dropEffect = "move";
+  });
+
+  item.addEventListener("dragleave", () => {
+    item.classList.remove("drag-over");
+  });
+
+  item.addEventListener("drop", (e) => {
+    e.preventDefault();
+    item.classList.remove("drag-over");
+
+    const fromId = dragSrcId || (()=>{
+      try { return e.dataTransfer.getData("text/plain"); } catch { return null; }
+    })();
+    const toId = item.dataset.id;
+    if (!fromId || !toId || fromId === toId) return;
+
+    const fromEl = slidesList.querySelector(`.slide-item[data-id="${fromId}"]`);
+    const toEl = slidesList.querySelector(`.slide-item[data-id="${toId}"]`);
+    if (!fromEl || !toEl) return;
+
+    // Decide insert position by mouse Y relative to target midpoint
+    const rect = toEl.getBoundingClientRect();
+    const before = (e.clientY < rect.top + rect.height / 2);
+
+    if (before) {
+      slidesList.insertBefore(fromEl, toEl);
+    } else {
+      slidesList.insertBefore(fromEl, toEl.nextSibling);
+    }
+
+    // Update order based on new DOM sequence
+    persistOrderFromDOM();
+  });
+}
+
+function persistOrderFromDOM(){
+  const ids = [...slidesList.querySelectorAll(".slide-item")]
+    .map(el => el.dataset.id);
+
+  const arr = loadMeta();
+  const map = new Map(arr.map(x => [x.id, x]));
+  const newArr = ids.map((id, idx) => {
+    const s = map.get(id);
+    if (!s) return null;
+    s.order = idx + 1;
+    return s;
+  }).filter(Boolean);
+
+  // Keep any slides not rendered (e.g., filtered search)
+  const remaining = arr.filter(x => !ids.includes(x.id));
+
+  const merged = [...newArr, ...remaining];
+  saveMeta(merged);
+
+  setStatus("Urutan disusun dengan drag & drop.", "ok");
+  renderSlides(); // re-render to normalize
+}
+
+// ---------- RENDER ----------
+async function renderSlides(){
+  cachedSlides = sortSlides(loadMeta());
+
+  const q = (searchInput.value || "").toLowerCase().trim();
+  const filtered = !q ? cachedSlides : cachedSlides.filter(s => (s.title || "").toLowerCase().includes(q));
+
+  slidesList.innerHTML = "";
+
+  if (!filtered.length){
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.textContent = "Tiada slide lagi. Tambah media di panel kiri.";
+    slidesList.appendChild(empty);
+    return;
+  }
+
+  for (const s of filtered){
+    const item = document.createElement("div");
+    item.className = "slide-item";
+    item.dataset.id = s.id;
+    item.draggable = true;
+
+    const thumb = document.createElement("div");
+    thumb.className = "thumb";
+
+    const handle = document.createElement("span");
+    handle.className = "drag-handle";
+    handle.textContent = "↕";
+    thumb.appendChild(handle);
+
+    // preview thumb
+    if (s.type === "video"){
+      const v = document.createElement("video");
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = "metadata";
+
+      if (s.source === "blob"){
+        const blob = await idbGet(s.id);
+        if (blob){
+          const u = URL.createObjectURL(blob);
+          v.src = u;
+          v.onloadeddata = () => URL.revokeObjectURL(u);
+        }
+      } else {
+        v.src = s.url || "";
+      }
+      thumb.appendChild(v);
+    } else {
+      const img = document.createElement("img");
+      if (s.source === "blob"){
+        const blob = await idbGet(s.id);
+        if (blob){
+          const u = URL.createObjectURL(blob);
+          img.src = u;
+          img.onload = () => URL.revokeObjectURL(u);
+        }
+      } else {
+        img.src = s.url || "";
+      }
+      img.alt = s.title || "slide";
+      thumb.appendChild(img);
+    }
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+
+    const h3 = document.createElement("h3");
+    const t = document.createElement("span");
+    t.textContent = s.title || "(Tiada tajuk)";
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    pill.textContent = s.type === "video" ? "VIDEO" : "IMAGE";
+    h3.appendChild(t);
+    h3.appendChild(pill);
+
+    const line1 = document.createElement("div");
+    line1.className = "controls-line";
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.value = s.title || "";
+    titleInput.placeholder = "Tajuk...";
+    titleInput.style.flex = "1";
+    titleInput.style.minWidth = "140px";
+
+    const btnSaveTitle = document.createElement("button");
+    btnSaveTitle.className = "btn small";
+    btnSaveTitle.textContent = "Simpan Tajuk";
+    btnSaveTitle.onclick = () => {
+      const arr = loadMeta();
+      const i = arr.findIndex(x => x.id === s.id);
+      if (i !== -1){
+        arr[i].title = titleInput.value.trim();
+        saveMeta(arr);
+        setStatus("Tajuk dikemas kini.", "ok");
+        renderSlides();
+      }
+    };
+
+    line1.appendChild(titleInput);
+    line1.appendChild(btnSaveTitle);
+
+    const line2 = document.createElement("div");
+    line2.className = "controls-line";
+    line2.style.marginTop = "6px";
+
+    const durLabel = document.createElement("span");
+    durLabel.className = "muted";
+    durLabel.textContent = "Masa (s)";
+
+    const durationInput = document.createElement("input");
+    durationInput.type = "number";
+    durationInput.min = "1";
+    durationInput.step = "1";
+    durationInput.className = "duration-input";
+    durationInput.placeholder = `Default ${settings.defaultDurationSec}s`;
+    durationInput.value = s.durationSec ?? "";
+
+    const btnSaveDur = document.createElement("button");
+    btnSaveDur.className = "btn small ok";
+    btnSaveDur.textContent = "Simpan Masa";
+    btnSaveDur.onclick = () => {
+      const arr = loadMeta();
+      const i = arr.findIndex(x => x.id === s.id);
+      if (i !== -1){
+        arr[i].durationSec = durationInput.value ? Number(durationInput.value) : null;
+        saveMeta(arr);
+        setStatus("Duration dikemas kini.", "ok");
+        renderSlides();
+      }
+    };
+
+    const btnDelete = document.createElement("button");
+    btnDelete.className = "btn small danger";
+    btnDelete.textContent = "Padam";
+    btnDelete.onclick = async () => {
+      if (!confirm("Padam slide ini?")) return;
+
+      const arr = loadMeta().filter(x => x.id !== s.id);
+      saveMeta(arr);
+
+      if (s.source === "blob"){
+        await idbDelete(s.id);
+      }
+
+      setStatus("Slide dipadam.", "ok");
+      renderSlides();
+    };
+
+    line2.appendChild(durLabel);
+    line2.appendChild(durationInput);
+    line2.appendChild(btnSaveDur);
+    line2.appendChild(btnDelete);
+
+    meta.appendChild(h3);
+    meta.appendChild(line1);
+    meta.appendChild(line2);
+
+    item.appendChild(thumb);
+    item.appendChild(meta);
+
+    attachDnD(item);
+    slidesList.appendChild(item);
+  }
+}
+
+// ---------- ADD FILE SLIDE ----------
+btnUpload.onclick = async () => {
+  const file = fileInput.files?.[0];
+  if (!file){
+    setStatus("Sila pilih fail gambar/video.", "err");
+    return;
+  }
+
+  try{
+    setStatus("Menyimpan media secara local...");
+
+    const id = nowId();
+    const type = isVideoFile(file) ? "video" : "image";
+
+    await idbPut(id, file);
+
+    const arr = applySequentialOrder(loadMeta());
+    const maxOrder = arr.length ? Math.max(...arr.map(s => Number(s.order ?? 0))) : 0;
+
+    arr.push({
+      id,
+      title: uploadTitle.value.trim(),
+      type,
+      source: "blob",
+      durationSec: uploadDuration.value ? Number(uploadDuration.value) : null,
+      order: maxOrder + 1,
+      createdAt: Date.now()
+    });
+
+    saveMeta(arr);
+
+    fileInput.value = "";
+    uploadTitle.value = "";
+    uploadDuration.value = "";
+
+    setStatus("Berjaya tambah slide local.", "ok");
+    renderSlides();
+  } catch(e){
+    console.error(e);
+    setStatus("Gagal simpan media. Storage browser mungkin penuh.", "err");
+  }
+};
+
+// ---------- ADD URL SLIDE ----------
+btnAddUrl.onclick = () => {
+  const url = urlInput.value.trim();
+  if (!url){
+    setStatus("Sila isi URL.", "err");
+    return;
+  }
+
+  const arr = applySequentialOrder(loadMeta());
+  const maxOrder = arr.length ? Math.max(...arr.map(s => Number(s.order ?? 0))) : 0;
+
+  arr.push({
+    id: nowId(),
+    title: urlTitle.value.trim(),
+    type: isVideoUrl(url) ? "video" : "image",
+    source: "url",
+    url,
+    durationSec: urlDuration.value ? Number(urlDuration.value) : null,
+    order: maxOrder + 1,
+    createdAt: Date.now()
+  });
+
+  saveMeta(arr);
+
+  urlInput.value = "";
+  urlTitle.value = "";
+  urlDuration.value = "";
+
+  setStatus("Slide URL ditambah.", "ok");
+  renderSlides();
+};
+
+// ---------- SETTINGS ----------
+btnSaveSettings.onclick = () => {
+  const val = Number(elDefaultDuration.value || 0);
+  if (!val || val < 1){
+    setStatus("Sila isi default duration yang sah.", "err");
+    return;
+  }
+  settings.defaultDurationSec = val;
+  saveSettings(settings);
+  setStatus("Settings global disimpan.", "ok");
+  renderSlides();
+};
+
+// ---------- EXPORT / IMPORT ----------
+btnExport.onclick = async () => {
+  const meta = sortSlides(loadMeta());
+  const s = loadSettings();
+
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings: s,
+    slides: meta
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "slideshow-local-export.json";
+  a.click();
+  URL.revokeObjectURL(url);
+
+  setStatus("Export metadata berjaya.", "ok");
+};
+
+importInput.onchange = async () => {
+  const file = importInput.files?.[0];
+  if (!file) return;
+
+  try{
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (!data || !Array.isArray(data.slides)){
+      setStatus("Fail import tidak sah.", "err");
+      return;
+    }
+
+    const normalized = applySequentialOrder(data.slides);
+
+    localStorage.setItem(META_KEY, JSON.stringify(normalized));
+    if (data.settings){
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.settings));
+    }
+
+    settings = loadSettings();
+    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
+
+    notifyUpdate();
+    setStatus("Import metadata berjaya. (Media blob perlu re-upload jika tiada)", "ok");
+    renderSlides();
+  } catch(e){
+    console.error(e);
+    setStatus("Import gagal.", "err");
+  } finally {
+    importInput.value = "";
+  }
+};
+
+// ---------- CLEAR ALL ----------
+btnClearAll.onclick = async () => {
+  if (!confirm("Padam SEMUA slides & media local?")) return;
+
+  localStorage.removeItem(META_KEY);
+  await idbClear();
+
+  notifyUpdate();
+  setStatus("Semua slides dipadam.", "ok");
+  renderSlides();
+};
+
+// ---------- OPEN VIEW + AUTO FS ----------
+btnOpenAutoFS.onclick = () => {
+  // cache-bust param for GitHub Pages caching
+  const url = `./view.html?autofs=1&t=${Date.now()}`;
+  window.open(url, "_blank", "noopener");
+  setStatus("View dibuka dalam mode Auto Fullscreen (1-click).", "ok");
+};
+
+// ---------- REFRESH / SEARCH ----------
+btnRefresh.onclick = () => {
+  settings = loadSettings();
+  elDefaultDuration.value = settings.defaultDurationSec ?? 6;
+  renderSlides();
+  setStatus("Paparan dikemas kini.", "ok");
+};
+searchInput.addEventListener("input", renderSlides);
+
+// ---------- SYNC LISTENERS ----------
+window.addEventListener("storage", (e) => {
+  if (e.key === META_KEY || e.key === SETTINGS_KEY){
+    settings = loadSettings();
+    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
+    renderSlides();
+  }
+});
+if (bc){
+  bc.onmessage = () => {
+    settings = loadSettings();
+    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
+    renderSlides();
+  };
+}
+
+// ---------- INIT ----------
+(function init(){
+  settings = loadSettings();
+  elDefaultDuration.value = settings.defaultDurationSec ?? 6;
+  renderSlides();
+  setStatus("Sedia (Local Mode).", "ok");
+})();
+</script>
+</body>
+</html>
