@@ -100,6 +100,7 @@
       font-weight:600;
       font-size:12.5px;
       transition:.15s transform, .15s opacity, .15s border;
+      text-align:center;
     }
     .btn:hover{transform: translateY(-1px); border-color: rgba(255,255,255,.18)}
     .btn:active{transform: translateY(0px); opacity:.9}
@@ -137,6 +138,14 @@
       border:1px solid var(--border);
       background: rgba(255,255,255,.02);
     }
+    .slide-item.dragging{
+      opacity:.45;
+      outline: 1px dashed rgba(255,255,255,.25);
+    }
+    .slide-item.drag-over{
+      border-color: rgba(110,231,255,.45);
+      background: rgba(110,231,255,.06);
+    }
     .thumb{
       width:86px; height:60px;
       border-radius:10px;
@@ -145,9 +154,23 @@
       overflow:hidden;
       display:flex; align-items:center; justify-content:center;
       color:var(--muted); font-size:10px;
+      position:relative;
     }
     .thumb img, .thumb video{
       width:100%; height:100%; object-fit:cover;
+    }
+    .drag-handle{
+      position:absolute;
+      right:4px;
+      top:4px;
+      font-size:12px;
+      background: rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.12);
+      padding:1px 4px;
+      border-radius:6px;
+      color: rgba(255,255,255,.75);
+      cursor: grab;
+      user-select:none;
     }
     .meta h3{
       font-size:13.5px; margin:0 0 6px;
@@ -182,7 +205,7 @@
     .status.err{border-color: rgba(255,107,107,.35)}
     .link-btn{
       text-decoration:none;
-      display:inline-flex; align-items:center; gap:8px;
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
     }
   </style>
 </head>
@@ -192,11 +215,12 @@
       <span class="badge">LOCAL SLIDESHOW</span>
       <div>
         <h1>Control Panel</h1>
-        <div class="sub">Tak perlu Firebase • Data simpan dalam laptop/browser anda</div>
+        <div class="sub">Tak perlu Firebase • Drag & Drop untuk susun slide</div>
       </div>
     </div>
-    <div class="row" style="max-width:420px;">
-      <a class="btn small link-btn" href="./view.html" target="_blank">🖥️ Buka View Page</a>
+    <div class="row" style="max-width:560px;">
+      <button id="btnOpenAutoFS" class="btn small accent">🖥️ Open View + Auto Fullscreen</button>
+      <a class="btn small link-btn" href="./view.html" target="_blank">Buka View</a>
       <button id="btnRefresh" class="btn small">↻ Refresh</button>
     </div>
   </header>
@@ -247,7 +271,7 @@
         <div class="section-title">Pengurusan Data</div>
         <div class="row">
           <button id="btnExport" class="btn">⤓ Export JSON</button>
-          <label class="btn" style="text-align:center;">
+          <label class="btn">
             ⤒ Import JSON
             <input id="importInput" type="file" accept="application/json" style="display:none;">
           </label>
@@ -264,7 +288,7 @@
         <div class="row" style="justify-content:space-between; gap:14px;">
           <div>
             <div class="section-title" style="margin-bottom:4px;">Senarai Slides</div>
-            <div class="muted">Auto sync ke View Page (tab lain)</div>
+            <div class="muted">Drag & drop pada item untuk susun urutan</div>
           </div>
           <div class="row" style="max-width:260px;">
             <input id="searchInput" type="text" placeholder="Cari tajuk..." />
@@ -298,513 +322,4 @@ function openDB(){
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE);
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbPut(id, blob){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(blob, id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function idbGet(id){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbDelete(id){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function idbClear(){
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-// ---------- META HELPERS ----------
-function loadMeta(){
-  try { return JSON.parse(localStorage.getItem(META_KEY) || "[]"); }
-  catch { return []; }
-}
-function saveMeta(arr){
-  localStorage.setItem(META_KEY, JSON.stringify(arr));
-  notifyUpdate();
-}
-function loadSettings(){
-  try {
-    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
-    return s || { defaultDurationSec: 6, updatedAt: Date.now() };
-  } catch {
-    return { defaultDurationSec: 6, updatedAt: Date.now() };
-  }
-}
-function saveSettings(s){
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...s, updatedAt: Date.now() }));
-  notifyUpdate();
-}
-
-function notifyUpdate(){
-  if (bc) bc.postMessage({ type:"update", at: Date.now() });
-}
-
-// ---------- UTIL ----------
-function nowId(){
-  return `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-}
-function isVideoFile(file){
-  return (file.type || "").startsWith("video");
-}
-function isVideoUrl(url=""){
-  const u = url.toLowerCase();
-  return u.includes(".mp4") || u.includes(".webm") || u.includes(".ogg") || u.includes("video");
-}
-function sortSlides(list){
-  return [...list].sort((a,b) => {
-    const ao = Number(a.order ?? 999999);
-    const bo = Number(b.order ?? 999999);
-    if (ao !== bo) return ao - bo;
-    return Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0);
-  });
-}
-
-// ---------- UI ELEMENTS ----------
-const elDefaultDuration = document.getElementById("defaultDuration");
-const btnSaveSettings = document.getElementById("saveSettings");
-const btnUpload = document.getElementById("btnUpload");
-const fileInput = document.getElementById("fileInput");
-const uploadTitle = document.getElementById("uploadTitle");
-const uploadDuration = document.getElementById("uploadDuration");
-
-const urlInput = document.getElementById("urlInput");
-const urlTitle = document.getElementById("urlTitle");
-const urlDuration = document.getElementById("urlDuration");
-const btnAddUrl = document.getElementById("btnAddUrl");
-
-const slidesList = document.getElementById("slidesList");
-const statusBox = document.getElementById("statusBox");
-const btnRefresh = document.getElementById("btnRefresh");
-const searchInput = document.getElementById("searchInput");
-
-const btnExport = document.getElementById("btnExport");
-const importInput = document.getElementById("importInput");
-const btnClearAll = document.getElementById("btnClearAll");
-
-let settings = loadSettings();
-let cachedSlides = sortSlides(loadMeta());
-
-// ---------- STATUS ----------
-function setStatus(msg, type="muted"){
-  statusBox.className = `status ${type}`;
-  statusBox.textContent = `Status: ${msg}`;
-}
-
-// ---------- RENDER ----------
-async function renderSlides(){
-  cachedSlides = sortSlides(loadMeta());
-  const q = (searchInput.value || "").toLowerCase().trim();
-  const filtered = !q ? cachedSlides : cachedSlides.filter(s => (s.title || "").toLowerCase().includes(q));
-
-  slidesList.innerHTML = "";
-
-  if (!filtered.length){
-    const empty = document.createElement("div");
-    empty.className = "muted";
-    empty.textContent = "Tiada slide lagi. Tambah media di panel kiri.";
-    slidesList.appendChild(empty);
-    return;
-  }
-
-  for (const s of filtered){
-    const item = document.createElement("div");
-    item.className = "slide-item";
-
-    const thumb = document.createElement("div");
-    thumb.className = "thumb";
-
-    // preview thumb
-    if (s.type === "video"){
-      const v = document.createElement("video");
-      v.muted = true;
-      v.playsInline = true;
-      v.preload = "metadata";
-
-      if (s.source === "blob"){
-        const blob = await idbGet(s.id);
-        if (blob){
-          v.src = URL.createObjectURL(blob);
-          v.onloadeddata = () => URL.revokeObjectURL(v.src);
-        } else {
-          v.replaceWith(document.createTextNode("No file"));
-        }
-      } else {
-        v.src = s.url;
-      }
-      thumb.appendChild(v);
-    } else {
-      const img = document.createElement("img");
-      if (s.source === "blob"){
-        const blob = await idbGet(s.id);
-        if (blob){
-          const u = URL.createObjectURL(blob);
-          img.src = u;
-          img.onload = () => URL.revokeObjectURL(u);
-        }
-      } else {
-        img.src = s.url;
-      }
-      img.alt = s.title || "slide";
-      thumb.appendChild(img);
-    }
-
-    const meta = document.createElement("div");
-    meta.className = "meta";
-
-    const h3 = document.createElement("h3");
-    const t = document.createElement("span");
-    t.textContent = s.title || "(Tiada tajuk)";
-    const pill = document.createElement("span");
-    pill.className = "pill";
-    pill.textContent = s.type === "video" ? "VIDEO" : "IMAGE";
-    h3.appendChild(t);
-    h3.appendChild(pill);
-
-    const line1 = document.createElement("div");
-    line1.className = "controls-line";
-
-    const titleInput = document.createElement("input");
-    titleInput.type = "text";
-    titleInput.value = s.title || "";
-    titleInput.placeholder = "Tajuk...";
-    titleInput.style.flex = "1";
-    titleInput.style.minWidth = "140px";
-
-    const btnSaveTitle = document.createElement("button");
-    btnSaveTitle.className = "btn small";
-    btnSaveTitle.textContent = "Simpan Tajuk";
-    btnSaveTitle.onclick = () => {
-      const arr = loadMeta();
-      const idx = arr.findIndex(x => x.id === s.id);
-      if (idx !== -1){
-        arr[idx].title = titleInput.value.trim();
-        saveMeta(arr);
-        setStatus("Tajuk dikemas kini.", "ok");
-        renderSlides();
-      }
-    };
-
-    line1.appendChild(titleInput);
-    line1.appendChild(btnSaveTitle);
-
-    const line2 = document.createElement("div");
-    line2.className = "controls-line";
-    line2.style.marginTop = "6px";
-
-    const durLabel = document.createElement("span");
-    durLabel.className = "muted";
-    durLabel.textContent = "Masa (s)";
-
-    const durationInput = document.createElement("input");
-    durationInput.type = "number";
-    durationInput.min = "1";
-    durationInput.step = "1";
-    durationInput.className = "duration-input";
-    durationInput.placeholder = `Default ${settings.defaultDurationSec}s`;
-    durationInput.value = s.durationSec ?? "";
-
-    const btnSaveDur = document.createElement("button");
-    btnSaveDur.className = "btn small ok";
-    btnSaveDur.textContent = "Simpan Masa";
-    btnSaveDur.onclick = () => {
-      const arr = loadMeta();
-      const idx = arr.findIndex(x => x.id === s.id);
-      if (idx !== -1){
-        arr[idx].durationSec = durationInput.value ? Number(durationInput.value) : null;
-        saveMeta(arr);
-        setStatus("Duration dikemas kini.", "ok");
-        renderSlides();
-      }
-    };
-
-    const btnUp = document.createElement("button");
-    btnUp.className = "btn small";
-    btnUp.textContent = "↑";
-    btnUp.onclick = () => {
-      const arr = sortSlides(loadMeta());
-      const i = arr.findIndex(x => x.id === s.id);
-      if (i > 0){
-        [arr[i-1], arr[i]] = [arr[i], arr[i-1]];
-        arr.forEach((x, idx) => x.order = idx + 1);
-        saveMeta(arr);
-        setStatus("Urutan dikemas kini.", "ok");
-        renderSlides();
-      }
-    };
-
-    const btnDown = document.createElement("button");
-    btnDown.className = "btn small";
-    btnDown.textContent = "↓";
-    btnDown.onclick = () => {
-      const arr = sortSlides(loadMeta());
-      const i = arr.findIndex(x => x.id === s.id);
-      if (i !== -1 && i < arr.length - 1){
-        [arr[i+1], arr[i]] = [arr[i], arr[i+1]];
-        arr.forEach((x, idx) => x.order = idx + 1);
-        saveMeta(arr);
-        setStatus("Urutan dikemas kini.", "ok");
-        renderSlides();
-      }
-    };
-
-    const btnDelete = document.createElement("button");
-    btnDelete.className = "btn small danger";
-    btnDelete.textContent = "Padam";
-    btnDelete.onclick = async () => {
-      if (!confirm("Padam slide ini?")) return;
-
-      const arr = loadMeta().filter(x => x.id !== s.id);
-      saveMeta(arr);
-
-      if (s.source === "blob"){
-        await idbDelete(s.id);
-      }
-
-      setStatus("Slide dipadam.", "ok");
-      renderSlides();
-    };
-
-    line2.appendChild(durLabel);
-    line2.appendChild(durationInput);
-    line2.appendChild(btnSaveDur);
-    line2.appendChild(btnUp);
-    line2.appendChild(btnDown);
-    line2.appendChild(btnDelete);
-
-    meta.appendChild(h3);
-    meta.appendChild(line1);
-    meta.appendChild(line2);
-
-    item.appendChild(thumb);
-    item.appendChild(meta);
-    slidesList.appendChild(item);
-  }
-}
-
-// ---------- ADD FILE SLIDE ----------
-btnUpload.onclick = async () => {
-  const file = fileInput.files?.[0];
-  if (!file){
-    setStatus("Sila pilih fail gambar/video.", "err");
-    return;
-  }
-
-  try{
-    setStatus("Menyimpan media secara local...");
-
-    const id = nowId();
-    const type = isVideoFile(file) ? "video" : "image";
-
-    // save blob into IDB
-    await idbPut(id, file);
-
-    const arr = sortSlides(loadMeta());
-    const maxOrder = arr.length ? Math.max(...arr.map(s => Number(s.order ?? 0))) : 0;
-
-    arr.push({
-      id,
-      title: uploadTitle.value.trim(),
-      type,
-      source: "blob",
-      durationSec: uploadDuration.value ? Number(uploadDuration.value) : null,
-      order: maxOrder + 1,
-      createdAt: Date.now()
-    });
-
-    saveMeta(arr);
-
-    fileInput.value = "";
-    uploadTitle.value = "";
-    uploadDuration.value = "";
-
-    setStatus("Berjaya tambah slide local.", "ok");
-    renderSlides();
-  } catch(e){
-    console.error(e);
-    setStatus("Gagal simpan media. Storage browser mungkin penuh.", "err");
-  }
-};
-
-// ---------- ADD URL SLIDE ----------
-btnAddUrl.onclick = () => {
-  const url = urlInput.value.trim();
-  if (!url){
-    setStatus("Sila isi URL.", "err");
-    return;
-  }
-
-  const arr = sortSlides(loadMeta());
-  const maxOrder = arr.length ? Math.max(...arr.map(s => Number(s.order ?? 0))) : 0;
-
-  arr.push({
-    id: nowId(),
-    title: urlTitle.value.trim(),
-    type: isVideoUrl(url) ? "video" : "image",
-    source: "url",
-    url,
-    durationSec: urlDuration.value ? Number(urlDuration.value) : null,
-    order: maxOrder + 1,
-    createdAt: Date.now()
-  });
-
-  saveMeta(arr);
-
-  urlInput.value = "";
-  urlTitle.value = "";
-  urlDuration.value = "";
-
-  setStatus("Slide URL ditambah.", "ok");
-  renderSlides();
-};
-
-// ---------- SETTINGS ----------
-btnSaveSettings.onclick = () => {
-  const val = Number(elDefaultDuration.value || 0);
-  if (!val || val < 1){
-    setStatus("Sila isi default duration yang sah.", "err");
-    return;
-  }
-  settings.defaultDurationSec = val;
-  saveSettings(settings);
-  setStatus("Settings global disimpan.", "ok");
-};
-
-// ---------- EXPORT / IMPORT ----------
-btnExport.onclick = async () => {
-  const meta = sortSlides(loadMeta());
-  const s = loadSettings();
-
-  // NOTE: export only metadata (not blobs) for simplicity
-  const payload = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    settings: s,
-    slides: meta
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "slideshow-local-export.json";
-  a.click();
-  URL.revokeObjectURL(url);
-
-  setStatus("Export metadata berjaya.", "ok");
-};
-
-importInput.onchange = async () => {
-  const file = importInput.files?.[0];
-  if (!file) return;
-
-  try{
-    const text = await file.text();
-    const data = JSON.parse(text);
-
-    if (!data || !Array.isArray(data.slides)){
-      setStatus("Fail import tidak sah.", "err");
-      return;
-    }
-
-    // Only import metadata. Blob slides that refer to local blobs
-    // will need re-upload if blobs not exists.
-    localStorage.setItem(META_KEY, JSON.stringify(data.slides));
-    if (data.settings){
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.settings));
-    }
-
-    settings = loadSettings();
-    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-
-    notifyUpdate();
-    setStatus("Import metadata berjaya. (Media blob perlu re-upload jika tiada)", "ok");
-    renderSlides();
-  } catch(e){
-    console.error(e);
-    setStatus("Import gagal.", "err");
-  } finally {
-    importInput.value = "";
-  }
-};
-
-// ---------- CLEAR ALL ----------
-btnClearAll.onclick = async () => {
-  if (!confirm("Padam SEMUA slides & media local?")) return;
-
-  localStorage.removeItem(META_KEY);
-  await idbClear();
-
-  notifyUpdate();
-  setStatus("Semua slides dipadam.", "ok");
-  renderSlides();
-};
-
-// ---------- REFRESH / SEARCH ----------
-btnRefresh.onclick = () => {
-  settings = loadSettings();
-  elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-  renderSlides();
-  setStatus("Paparan dikemas kini.", "ok");
-};
-searchInput.addEventListener("input", renderSlides);
-
-// ---------- SYNC LISTENERS ----------
-window.addEventListener("storage", (e) => {
-  if (e.key === META_KEY || e.key === SETTINGS_KEY){
-    settings = loadSettings();
-    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-    renderSlides();
-  }
-});
-if (bc){
-  bc.onmessage = () => {
-    settings = loadSettings();
-    elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-    renderSlides();
-  };
-}
-
-// ---------- INIT ----------
-(function init(){
-  settings = loadSettings();
-  elDefaultDuration.value = settings.defaultDurationSec ?? 6;
-  renderSlides();
-  setStatus("Sedia (Local Mode).", "ok");
-})();
-</script>
-</body>
-</html>
+      if (!db.objectStoreNames.contai
