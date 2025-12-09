@@ -215,12 +215,12 @@
       <span class="badge">LOCAL SLIDESHOW</span>
       <div>
         <h1>Control Panel</h1>
-        <div class="sub">Tak perlu Firebase • Drag & Drop untuk susun slide</div>
+        <div class="sub">Index = Control • Link view guna URL anda</div>
       </div>
     </div>
-    <div class="row" style="max-width:560px;">
+    <div class="row" style="max-width:620px;">
       <button id="btnOpenAutoFS" class="btn small accent">🖥️ Open View + Auto Fullscreen</button>
-      <a class="btn small link-btn" href="./view.html" target="_blank">Buka View</a>
+      <a id="viewLinkBtn" class="btn small link-btn" href="#" target="_blank">Buka View</a>
       <button id="btnRefresh" class="btn small">↻ Refresh</button>
     </div>
   </header>
@@ -307,6 +307,9 @@
    - metadata: localStorage
    - media blobs: IndexedDB
 ========================= */
+
+// ✅ YOUR VIEW PAGE BASE URL
+const VIEW_BASE = "https://g-99215544-beep.github.io/slideshowview/";
 
 const META_KEY = "slideshow_local_meta_v1";
 const SETTINGS_KEY = "slideshow_local_settings_v1";
@@ -445,9 +448,13 @@ const importInput = document.getElementById("importInput");
 const btnClearAll = document.getElementById("btnClearAll");
 
 const btnOpenAutoFS = document.getElementById("btnOpenAutoFS");
+const viewLinkBtn = document.getElementById("viewLinkBtn");
 
 let settings = loadSettings();
 let cachedSlides = sortSlides(loadMeta());
+
+// set view link button
+viewLinkBtn.href = VIEW_BASE;
 
 // ---------- STATUS ----------
 function setStatus(msg, type="muted"){
@@ -496,7 +503,6 @@ function attachDnD(item){
     const toEl = slidesList.querySelector(`.slide-item[data-id="${toId}"]`);
     if (!fromEl || !toEl) return;
 
-    // Decide insert position by mouse Y relative to target midpoint
     const rect = toEl.getBoundingClientRect();
     const before = (e.clientY < rect.top + rect.height / 2);
 
@@ -506,7 +512,6 @@ function attachDnD(item){
       slidesList.insertBefore(fromEl, toEl.nextSibling);
     }
 
-    // Update order based on new DOM sequence
     persistOrderFromDOM();
   });
 }
@@ -524,14 +529,12 @@ function persistOrderFromDOM(){
     return s;
   }).filter(Boolean);
 
-  // Keep any slides not rendered (e.g., filtered search)
   const remaining = arr.filter(x => !ids.includes(x.id));
-
   const merged = [...newArr, ...remaining];
-  saveMeta(merged);
 
+  saveMeta(merged);
   setStatus("Urutan disusun dengan drag & drop.", "ok");
-  renderSlides(); // re-render to normalize
+  renderSlides();
 }
 
 // ---------- RENDER ----------
@@ -565,7 +568,6 @@ async function renderSlides(){
     handle.textContent = "↕";
     thumb.appendChild(handle);
 
-    // preview thumb
     if (s.type === "video"){
       const v = document.createElement("video");
       v.muted = true;
@@ -861,10 +863,10 @@ btnClearAll.onclick = async () => {
 
 // ---------- OPEN VIEW + AUTO FS ----------
 btnOpenAutoFS.onclick = () => {
-  // cache-bust param for GitHub Pages caching
-  const url = `./view.html?autofs=1&t=${Date.now()}`;
+  // AutoFS expects your view page to support ?autofs=1, like the code I gave earlier
+  const url = `${VIEW_BASE}?autofs=1&t=${Date.now()}`;
   window.open(url, "_blank", "noopener");
-  setStatus("View dibuka dalam mode Auto Fullscreen (1-click).", "ok");
+  setStatus("View dibuka pada URL anda (Auto Fullscreen mode).", "ok");
 };
 
 // ---------- REFRESH / SEARCH ----------
